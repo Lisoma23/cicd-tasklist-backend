@@ -132,3 +132,5 @@ dist
 dist/
 
 .scannerwork/
+
+sonar-project.properties
