@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_CREDENTIALS_ID = 'sofiahzm-dockerhub-password'
         SONAR_HOST_URL = 'https://sonarqube.cicd.kits.ext.educentre.fr'
-        SONAR_PROJECT_KEY = 'sofiahzm-cicd-tasklist-backend'
+        SONAR_PROJECT_KEY = 'sofia-tasklist-backend'
     }
 
     options {
