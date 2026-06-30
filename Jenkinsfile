@@ -152,9 +152,6 @@ pipeline {
         }
 
         stage('Push Docker image') {
-            when {
-                branch 'main'
-            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: DOCKER_CREDENTIALS_ID,
