@@ -3,9 +3,8 @@ pipeline {
 
     environment {
         DOCKER_CREDENTIALS_ID = 'sofiahzm-dockerhub-password'
-        SONAR_PROJECT_KEY = 'sofia-cicd-tasklist-backend'
-        IMAGE_TAG = "${DOCKER_USERNAME}/cicd-tasklist-backend:${BUILD_NUMBER}"
-        IMAGE_LATEST = "${DOCKER_USERNAME}/cicd-tasklist-backend:latest"
+        SONAR_HOST_URL = 'https://sonarqube.cicd.kits.ext.educentre.fr'
+        SONAR_PROJECT_KEY = 'sofiahzm-cicd-tasklist-backend'
     }
 
     options {
@@ -44,21 +43,21 @@ pipeline {
 
         stage('SonarQube analysis') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'sofiahzm-sonar-token-backend', variable: 'SONAR_TOKEN'),
-                    string(credentialsId: 'sofiahzm-sonar-host-url', variable: 'SONAR_HOST_URL')
-                ]) {
-                    sh '''
-                        sonar-scanner \
-                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                          -Dsonar.sources=src \
-                          -Dsonar.tests=src/__tests__ \
-                          -Dsonar.test.inclusions=src/__tests__/**/*.test.ts \
-                          -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                          -Dsonar.sourceEncoding=UTF-8 \
-                          -Dsonar.host.url=${SONAR_HOST_URL} \
-                          -Dsonar.token=${SONAR_TOKEN}
-                    '''
+                withSonarQubeEnv('sonarqube-server-1') {
+                    withCredentials([
+                        string(credentialsId: 'sofiahzm-sonar-token', variable: 'SONAR_TOKEN')
+                    ]) {
+                        sh '''
+                            npx --yes sonar-scanner \
+                              -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+                              -Dsonar.sources=src \
+                              -Dsonar.test.inclusions=**/*.test.ts \
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.sourceEncoding=UTF-8 \
+                              -Dsonar.host.url=$SONAR_HOST_URL \
+                              -Dsonar.token=$SONAR_TOKEN
+                        '''
+                    }
                 }
             }
         }
@@ -80,8 +79,8 @@ pipeline {
                 )]) {
                     sh '''
                         docker build \
-                          -t ${IMAGE_TAG} \
-                          -t ${IMAGE_LATEST} \
+                          -t ${DOCKER_USERNAME}/cicd-tasklist-backend:${BUILD_NUMBER} \
+                          -t ${DOCKER_USERNAME}/cicd-tasklist-backend:latest \
                           .
                     '''
                 }
@@ -90,18 +89,24 @@ pipeline {
 
         stage('Trivy scan') {
             steps {
-                sh '''
-                    trivy image \
-                      --format json \
-                      --output trivy-report.json \
-                      --severity HIGH,CRITICAL \
-                      ${IMAGE_TAG} || true
+                withCredentials([usernamePassword(
+                    credentialsId: DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        trivy image \
+                          --format json \
+                          --output trivy-report.json \
+                          --severity HIGH,CRITICAL \
+                          ${DOCKER_USERNAME}/cicd-tasklist-backend:${BUILD_NUMBER} || true
 
-                    trivy image \
-                      --format table \
-                      --severity HIGH,CRITICAL \
-                      ${IMAGE_TAG} || true
-                '''
+                        trivy image \
+                          --format table \
+                          --severity HIGH,CRITICAL \
+                          ${DOCKER_USERNAME}/cicd-tasklist-backend:${BUILD_NUMBER} || true
+                    '''
+                }
             }
             post {
                 always {
@@ -126,12 +131,18 @@ pipeline {
 
         stage('Generate SBOM') {
             steps {
-                sh '''
-                    trivy image \
-                      --format spdx-json \
-                      --output sbom.spdx.json \
-                      ${IMAGE_TAG}
-                '''
+                withCredentials([usernamePassword(
+                    credentialsId: DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        trivy image \
+                          --format spdx-json \
+                          --output sbom.spdx.json \
+                          ${DOCKER_USERNAME}/cicd-tasklist-backend:${BUILD_NUMBER}
+                    '''
+                }
             }
             post {
                 always {
@@ -152,8 +163,8 @@ pipeline {
                 )]) {
                     sh '''
                         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-                        docker push ${IMAGE_TAG}
-                        docker push ${IMAGE_LATEST}
+                        docker push ${DOCKER_USERNAME}/cicd-tasklist-backend:${BUILD_NUMBER}
+                        docker push ${DOCKER_USERNAME}/cicd-tasklist-backend:latest
                         docker logout
                     '''
                 }
